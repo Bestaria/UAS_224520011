@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
 
     <meta charset="UTF-8">
@@ -15,6 +14,10 @@
             background:#eef2f7;
         }
 
+        .navbar{
+            background:#198754;
+        }
+
         .card{
             border:none;
             border-radius:15px;
@@ -25,7 +28,7 @@
             width:90px;
             height:90px;
             object-fit:cover;
-            border-radius:8px;
+            border-radius:10px;
         }
 
     </style>
@@ -34,7 +37,60 @@
 
 <body>
 
-<div class="container mt-5">
+<nav class="navbar navbar-dark">
+
+<div class="container">
+
+<span class="navbar-brand">
+
+⚽ SIREGA - Sistem Reservasi Lapangan
+
+</span>
+
+<div>
+
+<span class="text-white me-3">
+
+Halo,
+
+<b>{{ session('nama') }}</b>
+
+({{ session('role') }})
+
+</span>
+
+@if(session('role')=='admin')
+
+<a href="/dashboard" class="btn btn-light btn-sm me-2">
+
+Dashboard
+
+</a>
+
+@else
+
+<a href="/lapangan" class="btn btn-warning btn-sm me-2">
+
+Data Lapangan
+
+</a>
+
+@endif
+
+<a href="/logout" class="btn btn-danger btn-sm">
+
+Logout
+
+</a>
+
+</div>
+
+</div>
+
+</nav>
+
+
+<div class="container mt-4">
 
 <div class="card">
 
@@ -48,12 +104,15 @@ Data Reservasi
 
 </h3>
 
-<a href="/reservasi/create"
-class="btn btn-light">
+@if(session('role')!='admin')
+
+<a href="/reservasi/create" class="btn btn-light">
 
 + Reservasi Baru
 
 </a>
+
+@endif
 
 </div>
 
@@ -66,6 +125,16 @@ class="btn btn-light">
 <div class="alert alert-success">
 
 {{ session('success') }}
+
+</div>
+
+@endif
+
+@if(session('error'))
+
+<div class="alert alert-danger">
+
+{{ session('error') }}
 
 </div>
 
@@ -89,15 +158,13 @@ class="btn btn-light">
 
 <th>Total Bayar</th>
 
-<th>Bukti Transfer</th>
+<th>Bukti</th>
 
 <th>Status</th>
 
-<th width="260">
-
-Aksi
-
-</th>
+@if(session('role')=='admin')
+<th width="250">Aksi</th>
+@endif
 
 </tr>
 
@@ -105,41 +172,19 @@ Aksi
 
 <tbody>
 
-@if(count($reservasi)>0)
-
-@foreach($reservasi as $item)
+@forelse($reservasi as $item)
 
 <tr>
 
-<td>
+<td>{{ $loop->iteration }}</td>
 
-{{ $loop->iteration }}
+<td>{{ $item['nama'] }}</td>
 
-</td>
+<td>{{ $item['lapangan'] }}</td>
 
-<td>
+<td>{{ date('d-m-Y',strtotime($item['tanggal'])) }}</td>
 
-{{ $item['nama'] }}
-
-</td>
-
-<td>
-
-{{ $item['lapangan'] }}
-
-</td>
-
-<td>
-
-{{ date('d-m-Y',strtotime($item['tanggal'])) }}
-
-</td>
-
-<td>
-
-{{ $item['durasi'] }} Jam
-
-</td>
+<td>{{ $item['durasi'] }} Jam</td>
 
 <td>
 
@@ -149,7 +194,7 @@ Rp {{ number_format($item['total_bayar'],0,',','.') }}
 
 <td>
 
-@if(file_exists(public_path('transfer/'.$item['bukti'])))
+@if(!empty($item['bukti']) && file_exists(public_path('transfer/'.$item['bukti'])))
 
 <img src="{{ asset('transfer/'.$item['bukti']) }}">
 
@@ -199,19 +244,16 @@ Dibatalkan
 
 </td>
 
+@if(session('role')=='admin')
+
 <td>
+
+@if($item['status']=="Menunggu Konfirmasi")
 
 <a href="/reservasi/status/{{ $item['id'] }}/Dikonfirmasi"
 class="btn btn-primary btn-sm">
 
 Konfirmasi
-
-</a>
-
-<a href="/reservasi/status/{{ $item['id'] }}/Selesai"
-class="btn btn-success btn-sm">
-
-Selesai
 
 </a>
 
@@ -223,17 +265,44 @@ Batalkan
 
 </a>
 
+@endif
+
+
+@if($item['status']=="Dikonfirmasi")
+
+<a href="/reservasi/status/{{ $item['id'] }}/Selesai"
+class="btn btn-success btn-sm">
+
+Selesai
+
+</a>
+
+@endif
+
+@if(
+$item['status']=="Selesai" ||
+$item['status']=="Dibatalkan"
+)
+
+<span class="text-muted">
+
+Tidak ada aksi
+
+</span>
+
+@endif
+
 </td>
+
+@endif
 
 </tr>
 
-@endforeach
-
-@else
+@empty
 
 <tr>
 
-<td colspan="9" class="text-center">
+<td colspan="{{ session('role')=='admin' ? 9 : 8 }}" class="text-center">
 
 Belum ada data reservasi.
 
@@ -241,11 +310,21 @@ Belum ada data reservasi.
 
 </tr>
 
-@endif
+@endforelse
 
 </tbody>
 
 </table>
+
+<div class="mt-3">
+
+<a href="/lapangan" class="btn btn-secondary">
+
+Kembali
+
+</a>
+
+</div>
 
 </div>
 
@@ -254,5 +333,4 @@ Belum ada data reservasi.
 </div>
 
 </body>
-
 </html>

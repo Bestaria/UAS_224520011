@@ -6,7 +6,9 @@ use Illuminate\Http\Request;
 
 class ReservasiController extends Controller
 {
-    // Membaca data reservasi
+    /**
+     * Membaca data reservasi
+     */
     private function getData()
     {
         $path = storage_path('app/reservasi.json');
@@ -15,10 +17,14 @@ class ReservasiController extends Controller
             file_put_contents($path, json_encode([]));
         }
 
-        return json_decode(file_get_contents($path), true);
+        $data = json_decode(file_get_contents($path), true);
+
+        return is_array($data) ? $data : [];
     }
 
-    // Menyimpan data reservasi
+    /**
+     * Menyimpan data reservasi
+     */
     private function saveData($data)
     {
         file_put_contents(
@@ -27,25 +33,25 @@ class ReservasiController extends Controller
         );
     }
 
-    // Simpan Reservasi
+    /**
+     * Simpan Reservasi
+     */
     public function store(Request $request)
     {
         $request->validate([
-            'nama' => 'required',
-            'lapangan' => 'required',
-            'tanggal' => 'required|date',
-            'durasi' => 'required|numeric|min:1',
-            'harga' => 'required|numeric',
-            'bukti' => 'required|image|mimes:jpg,jpeg,png|max:2048'
+            'nama'      => 'required',
+            'lapangan'  => 'required',
+            'tanggal'   => 'required|date',
+            'durasi'    => 'required|numeric|min:1',
+            'harga'     => 'required|numeric',
+            'bukti'     => 'required|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        // Harga awal
         $harga = $request->harga;
 
-        // Cek hari (Sabtu=6, Minggu=7)
+        // Sabtu & Minggu tambah 50%
         $hari = date('N', strtotime($request->tanggal));
 
-        // Tambahan 50% jika akhir pekan
         if ($hari == 6 || $hari == 7) {
             $harga = $harga * 1.5;
         }
@@ -53,68 +59,147 @@ class ReservasiController extends Controller
         // Hitung total
         $total = $harga * $request->durasi;
 
-        // Diskon 10% jika durasi minimal 3 jam
+        // Diskon 10% jika minimal 3 jam
         if ($request->durasi >= 3) {
             $total = $total * 0.9;
         }
 
         // Upload bukti transfer
-        $namaFile = time() . '.' . $request->bukti->extension();
+        $namaFile = time().'.'.$request->bukti->extension();
 
         $request->bukti->move(
             public_path('transfer'),
             $namaFile
         );
 
-        // Ambil data lama
         $data = $this->getData();
 
-        // ID otomatis
-        $id = empty($data) ? 1 : max(array_column($data, 'id')) + 1;
+        $id = empty($data)
+            ? 1
+            : max(array_column($data, 'id')) + 1;
 
-        // Simpan data baru
         $data[] = [
-            'id' => $id,
-            'nama' => $request->nama,
-            'lapangan' => $request->lapangan,
-            'tanggal' => $request->tanggal,
-            'durasi' => $request->durasi,
-            'harga_per_jam' => $harga,
-            'total_bayar' => $total,
-            'bukti' => $namaFile,
-            'status' => 'Menunggu Konfirmasi'
+            'id'             => $id,
+            'nama'           => session('nama'),
+            'email'          => session('email'),
+            'lapangan'       => $request->lapangan,
+            'tanggal'        => $request->tanggal,
+            'durasi'         => $request->durasi,
+            'harga_per_jam'  => $harga,
+            'total_bayar'    => $total,
+            'bukti'          => $namaFile,
+            'status'         => 'Menunggu Konfirmasi'
         ];
 
         $this->saveData($data);
 
         return redirect('/reservasi')
-            ->with('success', 'Reservasi berhasil dibuat. Total Bayar: Rp ' . number_format($total, 0, ',', '.'));
+            ->with(
+                'success',
+                'Reservasi berhasil dibuat. Total Bayar Rp ' .
+                number_format($total, 0, ',', '.')
+            );
     }
 
-    // Menampilkan daftar reservasi
+    /**
+     * Data Reservasi
+     */
     public function index()
     {
         $reservasi = $this->getData();
 
+        // Member hanya melihat reservasi miliknya
+        if (session('role') != 'admin') {
+
+            $reservasi = array_filter($reservasi, function ($item) {
+                return isset($item['email']) &&
+                       $item['email'] == session('email');
+            });
+
+        }
+
         return view('reservasi.index', compact('reservasi'));
     }
 
-    // Mengubah status reservasi
+    /**
+     * Pesanan Saya
+     */
+    public function pesananSaya()
+    {
+        $data = $this->getData();
+
+        $reservasi = [];
+
+        foreach ($data as $item) {
+
+            if (
+                isset($item['email']) &&
+                $item['email'] == session('email')
+            ) {
+
+                $reservasi[] = $item;
+            }
+        }
+
+        return view('reservasi.pesanan', compact('reservasi'));
+    }
+
+    /**
+     * Update Status Reservasi
+     */
     public function status($id, $status)
     {
+        // Hanya Admin yang boleh mengubah status
+        if (session('role') != 'admin') {
+            abort(403);
+        }
+
         $data = $this->getData();
 
         foreach ($data as $key => $item) {
 
             if ($item['id'] == $id) {
 
-                $data[$key]['status'] = $status;
+                // Status akhir tidak boleh diubah
+                if (
+                    $item['status'] == 'Selesai' ||
+                    $item['status'] == 'Dibatalkan'
+                ) {
+
+                    return back()->with(
+                        'error',
+                        'Status reservasi tidak dapat diubah lagi.'
+                    );
+                }
+
+                // Menunggu → Dikonfirmasi / Dibatalkan
+                if (
+                    $item['status'] == 'Menunggu Konfirmasi' &&
+                    in_array($status, ['Dikonfirmasi', 'Dibatalkan'])
+                ) {
+
+                    $data[$key]['status'] = $status;
+                }
+
+                // Dikonfirmasi → Selesai
+                elseif (
+                    $item['status'] == 'Dikonfirmasi' &&
+                    $status == 'Selesai'
+                ) {
+
+                    $data[$key]['status'] = 'Selesai';
+                }
+
+                break;
             }
         }
 
         $this->saveData($data);
 
         return redirect('/reservasi')
-            ->with('success', 'Status reservasi berhasil diperbarui.');
+            ->with(
+                'success',
+                'Status reservasi berhasil diperbarui.'
+            );
     }
 }

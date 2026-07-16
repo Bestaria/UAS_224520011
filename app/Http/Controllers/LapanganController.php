@@ -3,87 +3,80 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\File;
 
 class LapanganController extends Controller
 {
-    // Membaca data dari file JSON
+    /**
+     * Membaca data JSON
+     */
     private function getData()
     {
         $path = storage_path('app/lapangan.json');
 
-        if (!file_exists($path)) {
-            file_put_contents($path, json_encode([]));
+        if (!File::exists($path)) {
+            File::put($path, json_encode([], JSON_PRETTY_PRINT));
         }
 
-        $json = file_get_contents($path);
+        $data = json_decode(File::get($path), true);
 
-        return json_decode($json, true);
+        return is_array($data) ? $data : [];
     }
 
-    // Menyimpan data ke file JSON
+    /**
+     * Menyimpan data JSON
+     */
     private function saveData($data)
     {
-        file_put_contents(
+        File::put(
             storage_path('app/lapangan.json'),
-            json_encode($data, JSON_PRETTY_PRINT)
+            json_encode(array_values($data), JSON_PRETTY_PRINT)
         );
     }
 
-    // Menampilkan semua data
+    /**
+     * Cek Login
+     */
+    private function checkLogin()
+    {
+        if (!session('login')) {
+            return redirect('/login')->send();
+        }
+    }
+
+    /**
+     * Cek Admin
+     */
+    private function checkAdmin()
+    {
+        $this->checkLogin();
+
+        if (session('role') != 'admin') {
+            abort(403, 'Anda tidak memiliki hak akses.');
+        }
+    }
+
+    /**
+     * Daftar Lapangan
+     */
     public function index()
     {
+        $this->checkLogin();
+
         $lapangan = $this->getData();
 
         return view('lapangan.index', compact('lapangan'));
     }
 
-    // Form tambah
-    public function create()
-    {
-        return view('lapangan.create');
-    }
-
-    // Simpan data baru
-    public function store(Request $request)
-    {
-        $request->validate([
-            'nama_lapangan' => 'required',
-            'harga_per_jam' => 'required|numeric',
-            'foto' => 'required|image|mimes:jpg,jpeg,png|max:2048'
-        ]);
-
-        $data = $this->getData();
-
-        // Upload foto
-        $namaFoto = time() . '.' . $request->foto->extension();
-
-        $request->foto->move(
-            public_path('gambar'),
-            $namaFoto
-        );
-
-        // ID otomatis
-        $id = empty($data) ? 1 : max(array_column($data, 'id')) + 1;
-
-        $data[] = [
-            'id' => $id,
-            'nama_lapangan' => $request->nama_lapangan,
-            'harga_per_jam' => $request->harga_per_jam,
-            'foto' => $namaFoto
-        ];
-
-        $this->saveData($data);
-
-        return redirect('/lapangan')
-            ->with('success', 'Data lapangan berhasil ditambahkan.');
-    }
-
-    // Detail
+    /**
+     * Detail Lapangan
+     */
     public function show($id)
     {
-        $data = $this->getData();
+        $this->checkLogin();
 
-        foreach ($data as $item) {
+        foreach ($this->getData() as $item) {
 
             if ($item['id'] == $id) {
 
@@ -96,12 +89,60 @@ class LapanganController extends Controller
         abort(404);
     }
 
-    // Form Edit
-    public function edit($id)
+    /**
+     * Form Tambah
+     */
+    public function create()
     {
+        $this->checkAdmin();
+
+        return view('lapangan.create');
+    }
+
+    /**
+     * Simpan Lapangan
+     */
+    public function store(Request $request)
+    {
+        $this->checkAdmin();
+
+        $request->validate([
+            'nama_lapangan' => 'required',
+            'harga_per_jam' => 'required|numeric',
+            'foto' => 'required|image|mimes:jpg,jpeg,png|max:2048'
+        ]);
+
         $data = $this->getData();
 
-        foreach ($data as $item) {
+        $namaFoto = time().'.'.$request->foto->extension();
+
+        $request->foto->move(public_path('gambar'), $namaFoto);
+
+        $id = empty($data)
+            ? 1
+            : max(array_column($data,'id')) + 1;
+
+        $data[] = [
+            'id' => $id,
+            'nama_lapangan' => $request->nama_lapangan,
+            'harga_per_jam' => $request->harga_per_jam,
+            'foto' => $namaFoto
+        ];
+
+        $this->saveData($data);
+
+        return redirect('/lapangan')
+            ->with('success','Data lapangan berhasil ditambahkan.');
+    }
+
+    /**
+     * Form Edit
+     */
+    public function edit($id)
+    {
+        $this->checkAdmin();
+
+        foreach ($this->getData() as $item) {
 
             if ($item['id'] == $id) {
 
@@ -114,27 +155,41 @@ class LapanganController extends Controller
         abort(404);
     }
 
-    // Update Data
+    /**
+     * Update Lapangan
+     */
     public function update(Request $request, $id)
     {
+        $this->checkAdmin();
+
         $request->validate([
-            'nama_lapangan' => 'required',
-            'harga_per_jam' => 'required|numeric'
+            'nama_lapangan'=>'required',
+            'harga_per_jam'=>'required|numeric',
+            'foto'=>'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
         $data = $this->getData();
+
+        $ditemukan = false;
 
         foreach ($data as $key => $item) {
 
             if ($item['id'] == $id) {
 
+                $ditemukan = true;
+
                 $data[$key]['nama_lapangan'] = $request->nama_lapangan;
                 $data[$key]['harga_per_jam'] = $request->harga_per_jam;
 
-                // Jika upload foto baru
                 if ($request->hasFile('foto')) {
 
-                    $namaFoto = time() . '.' . $request->foto->extension();
+                    $fotoLama = public_path('gambar/'.$item['foto']);
+
+                    if (File::exists($fotoLama)) {
+                        File::delete($fotoLama);
+                    }
+
+                    $namaFoto = time().'.'.$request->foto->extension();
 
                     $request->foto->move(
                         public_path('gambar'),
@@ -143,33 +198,71 @@ class LapanganController extends Controller
 
                     $data[$key]['foto'] = $namaFoto;
                 }
+
+                break;
             }
+        }
+
+        if (!$ditemukan) {
+            abort(404);
         }
 
         $this->saveData($data);
 
         return redirect('/lapangan')
-            ->with('success', 'Data lapangan berhasil diupdate.');
+            ->with('success','Data lapangan berhasil diperbarui.');
     }
 
-    // Hapus
+    /**
+     * Hapus Lapangan
+     */
     public function destroy($id)
     {
+        $this->checkAdmin();
+
         $data = $this->getData();
 
-        $hasil = [];
+        $ditemukan = false;
 
-        foreach ($data as $item) {
+        foreach ($data as $key => $item) {
 
-            if ($item['id'] != $id) {
+            if ($item['id'] == $id) {
 
-                $hasil[] = $item;
+                $ditemukan = true;
+
+                $foto = public_path('gambar/'.$item['foto']);
+
+                if (File::exists($foto)) {
+                    File::delete($foto);
+                }
+
+                unset($data[$key]);
+
+                break;
             }
         }
 
-        $this->saveData($hasil);
+        if (!$ditemukan) {
+            abort(404);
+        }
+
+        $this->saveData($data);
 
         return redirect('/lapangan')
-            ->with('success', 'Data lapangan berhasil dihapus.');
+            ->with('success','Data lapangan berhasil dihapus.');
+    }
+
+    /**
+     * Export PDF
+     */
+    public function exportPDF()
+    {
+        $this->checkAdmin();
+
+        $lapangan = $this->getData();
+
+        $pdf = Pdf::loadView('lapangan.pdf', compact('lapangan'));
+
+        return $pdf->download('Laporan_Data_Lapangan.pdf');
     }
 }

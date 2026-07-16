@@ -34,7 +34,8 @@ class LoginController extends Controller
                 return redirect('/dashboard');
             }
 
-            return redirect('/reservasi/create');
+            // Member diarahkan ke Data Lapangan
+            return redirect('/lapangan');
         }
 
         return view('auth.login');
@@ -45,7 +46,6 @@ class LoginController extends Controller
      */
     public function login(Request $request)
     {
-        // Validasi
         $request->validate([
             'email'    => 'required|email',
             'password' => 'required'
@@ -75,19 +75,21 @@ class LoginController extends Controller
                     'role'  => $user['role']
                 ]);
 
+                // ADMIN
                 if ($user['role'] == 'admin') {
 
                     return redirect('/dashboard')
                         ->with(
                             'success',
-                            'Selamat datang, '.$user['nama']
+                            'Selamat datang, ' . $user['nama']
                         );
                 }
 
-                return redirect('/reservasi/create')
+                // MEMBER
+                return redirect('/lapangan')
                     ->with(
                         'success',
-                        'Selamat datang, '.$user['nama']
+                        'Selamat datang, ' . $user['nama']
                     );
             }
         }

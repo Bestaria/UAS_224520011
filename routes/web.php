@@ -5,6 +5,7 @@ use App\Http\Controllers\LapanganController;
 use App\Http\Controllers\ReservasiController;
 use App\Http\Controllers\LoginController;
 
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -58,7 +59,8 @@ Route::get('/dashboard', function () {
     if (session('role') != 'admin') {
         abort(403);
     }
-
     return view('dashboard');
-
 });
+
+Route::get('/lapangan/pdf', [LapanganController::class,'exportPDF']);
+Route::get('/pesanan', [ReservasiController::class, 'pesananSaya']);

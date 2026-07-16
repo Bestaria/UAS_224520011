@@ -2,12 +2,13 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <title>SIREGA - Data Lapangan</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <style>
-
         body{
             background:#eef2f7;
         }
@@ -23,8 +24,8 @@
         }
 
         .table img{
-            width:110px;
-            height:80px;
+            width:120px;
+            height:85px;
             object-fit:cover;
             border-radius:10px;
         }
@@ -37,7 +38,6 @@
         .btn{
             border-radius:8px;
         }
-
     </style>
 
 </head>
@@ -48,10 +48,8 @@
 
 <div class="container">
 
-<a class="navbar-brand fw-bold fs-2">
-
+<a href="/lapangan" class="navbar-brand fw-bold fs-4">
 ⚽ SIREGA - Sistem Reservasi Lapangan Futsal
-
 </a>
 
 <div class="ms-auto">
@@ -73,29 +71,30 @@ Halo,
 
 @if(session('role')=='admin')
 
-<a href="/dashboard"
-class="btn btn-light btn-sm me-2">
-
+<a href="/dashboard" class="btn btn-light btn-sm me-2">
 Dashboard
-
 </a>
 
 @else
 
-<a href="/reservasi/create"
-class="btn btn-warning btn-sm me-2">
-
+<a href="/reservasi/create" class="btn btn-warning btn-sm me-2">
 Reservasi
+</a>
 
+<a href="/pesanan" class="btn btn-info btn-sm me-2">
+Pesanan Saya
 </a>
 
 @endif
 
-<a href="/logout"
-class="btn btn-danger btn-sm">
-
+<a href="/logout" class="btn btn-danger btn-sm">
 Logout
+</a>
 
+@else
+
+<a href="/login" class="btn btn-light btn-sm">
+Login
 </a>
 
 @endif
@@ -114,20 +113,23 @@ Logout
 
 <div class="d-flex justify-content-between align-items-center">
 
-<h4 class="mb-0">
-
+<h3 class="mb-0">
 Data Lapangan
-
-</h4>
+</h3>
 
 @if(session('role')=='admin')
 
-<a href="/lapangan/create"
-class="btn btn-light">
+<div>
 
-+ Tambah Lapangan
-
+<a href="/lapangan/pdf" class="btn btn-danger me-2">
+📄 Export PDF
 </a>
+
+<a href="/lapangan/create" class="btn btn-light">
++ Tambah Lapangan
+</a>
+
+</div>
 
 @endif
 
@@ -138,22 +140,24 @@ class="btn btn-light">
 <div class="card-body">
 
 @if(session('success'))
-
 <div class="alert alert-success">
-
-{{ session('success') }}
-
+    {{ session('success') }}
 </div>
-
 @endif
 
-<table class="table table-bordered table-hover">
+@if(session('error'))
+<div class="alert alert-danger">
+    {{ session('error') }}
+</div>
+@endif
+
+<table class="table table-bordered table-hover align-middle">
 
 <thead class="table-success">
 
 <tr>
 
-<th width="70">No</th>
+<th width="60">No</th>
 
 <th width="150">Foto</th>
 
@@ -163,6 +167,8 @@ class="btn btn-light">
 
 @if(session('role')=='admin')
 <th width="250">Aksi</th>
+@else
+<th width="120">Detail</th>
 @endif
 
 </tr>
@@ -171,9 +177,7 @@ class="btn btn-light">
 
 <tbody>
 
-@if(count($lapangan)>0)
-
-@foreach($lapangan as $item)
+@forelse($lapangan as $item)
 
 <tr>
 
@@ -183,68 +187,55 @@ class="btn btn-light">
 
 @if(!empty($item['foto']) && file_exists(public_path('gambar/'.$item['foto'])))
 
-<img src="{{ asset('gambar/'.$item['foto']) }}">
+<img src="{{ asset('gambar/'.$item['foto']) }}" alt="Foto Lapangan">
 
 @else
 
-<img src="{{ asset('gambar/default.png') }}">
+<img src="{{ asset('gambar/default.png') }}" alt="Default">
 
 @endif
 
 </td>
 
 <td>
-
-<b>{{ $item['nama_lapangan'] }}</b>
-
+<strong>{{ $item['nama_lapangan'] }}</strong>
 </td>
 
 <td>
-
 Rp {{ number_format($item['harga_per_jam'],0,',','.') }}
-
 </td>
-
-@if(session('role')=='admin')
 
 <td>
 
 <a href="/lapangan/show/{{ $item['id'] }}"
 class="btn btn-info btn-sm text-white">
-
 Detail
-
 </a>
+
+@if(session('role')=='admin')
 
 <a href="/lapangan/edit/{{ $item['id'] }}"
 class="btn btn-warning btn-sm">
-
 Edit
-
 </a>
 
 <a href="/lapangan/delete/{{ $item['id'] }}"
-onclick="return confirm('Yakin ingin menghapus data ini?')"
-class="btn btn-danger btn-sm">
-
+class="btn btn-danger btn-sm"
+onclick="return confirm('Yakin ingin menghapus data ini?')">
 Hapus
-
 </a>
-
-</td>
 
 @endif
 
+</td>
+
 </tr>
 
-@endforeach
-
-@else
+@empty
 
 <tr>
 
-<td colspan="5"
-class="text-center">
+<td colspan="{{ session('role')=='admin' ? 5 : 5 }}" class="text-center text-muted">
 
 Belum ada data lapangan.
 
@@ -252,7 +243,7 @@ Belum ada data lapangan.
 
 </tr>
 
-@endif
+@endforelse
 
 </tbody>
 
